@@ -1,0 +1,13 @@
+#!/bin/bash -e
+[[ -n $(git status -s) ]] && echo 'error: git cannot be dirty' && exit 1
+
+if [ -z "$1" ]
+  then
+    echo "$0 <version>"
+    exit 1
+fi
+
+V="$1"
+git push
+git tag $V
+git push origin $V

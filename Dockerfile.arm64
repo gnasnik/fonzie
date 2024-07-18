@@ -1,0 +1,5 @@
+# https://goreleaser.com/customization/docker
+FROM arm64v8/alpine:3.15
+RUN apk add --no-cache libc6-compat
+COPY fonzie /
+ENTRYPOINT ["/fonzie"]
