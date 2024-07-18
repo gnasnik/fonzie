@@ -51,6 +51,7 @@ func (chain *Chain) getClient() *cosmosclient.Client {
 		client, err := cosmosclient.New(context.Background(),
 			cosmosclient.WithAddressPrefix(chain.Prefix),
 			cosmosclient.WithNodeAddress(chain.RPC),
+			cosmosclient.WithGas("600000"),
 			cosmosclient.WithGasPrices("0.0025uttnt"),
 			cosmosclient.WithKeyringServiceName("titan"),
 			cosmosclient.WithKeyringDir(keyringDir),

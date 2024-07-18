@@ -128,7 +128,7 @@ func main() {
 	// Cleanly close down the Discord session.
 	defer dg.Close()
 
-	f := worker.NewFaucet(dg, chains, 100)
+	f := worker.NewFaucet(dg, chains, 50)
 	f.Run()
 
 	faucet = *f
