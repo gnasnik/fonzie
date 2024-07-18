@@ -1,10 +1,11 @@
 package main
 
 import (
-	"context"
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	"github.com/umee-network/fonzie/worker"
 	"regexp"
 	"strings"
 	"time"
@@ -64,13 +65,16 @@ func (receipts *FundingReceipts) Prune(maxAge time.Duration) {
 }
 
 var (
-	mnemonic   = os.Getenv("MNEMONIC")
-	botToken   = os.Getenv("BOT_TOKEN")
-	rawChains  = os.Getenv("CHAINS")
-	rawFunding = os.Getenv("FUNDING")
-	chains     chain.Chains
-	funding    ChainFunding
-	receipts   FundingReceipts
+	//mnemonic   = os.Getenv("MNEMONIC")
+	//keyringDir = os.Getenv("KEYRING_DIR")
+	botToken       = os.Getenv("BOT_TOKEN")
+	discordChannel = os.Getenv("DISCORD_CHANNEL")
+	rawChains      = os.Getenv("CHAINS")
+	rawFunding     = os.Getenv("FUNDING")
+	chains         chain.Chains
+	funding        ChainFunding
+	receipts       FundingReceipts
+	faucet         worker.Faucet
 )
 
 func init() {
@@ -81,15 +85,19 @@ func init() {
 
 	log.SetFormatter(&log.JSONFormatter{})
 
-	if mnemonic == "" {
-		log.Fatal("MNEMONIC is invalid")
-	}
+	//if mnemonic == "" {
+	//	log.Fatal("MNEMONIC is invalid")
+	//}
 	if botToken == "" {
 		log.Fatal("BOT_TOKEN is invalid")
 	}
 	if rawChains == "" {
 		log.Fatal("CHAINS config cannot be blank (json array)")
 	}
+	if discordChannel == "" {
+		log.Fatal("DISCORD_CHANNEL is invalid")
+	}
+
 	// parse chains config
 	err := json.Unmarshal([]byte(rawChains), &chains)
 	if err != nil {
@@ -106,11 +114,11 @@ func init() {
 
 func main() {
 
-	ctx := context.Background()
-	err := chains.ImportMnemonic(ctx, mnemonic)
-	if err != nil {
-		log.Fatal(err)
-	}
+	//ctx := context.Background()
+	//err := chains.ImportMnemonic(ctx, mnemonic)
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
 
 	// Create a new Discord session using the provided bot token.
 	dg, err := discordgo.New("Bot " + botToken)
@@ -119,6 +127,11 @@ func main() {
 	}
 	// Cleanly close down the Discord session.
 	defer dg.Close()
+
+	f := worker.NewFaucet(dg, chains, 100)
+	f.Run()
+
+	faucet = *f
 
 	// Register the messageCreate func as a callback for MessageCreate events.
 	dg.AddHandler(messageCreate)
@@ -148,8 +161,17 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
+	channel, err := s.Channel(m.ChannelID)
+	if err != nil {
+		return
+	}
+
+	if channel.Name != discordChannel {
+		return
+	}
+
 	// Do we support this command?
-	re, err := regexp.Compile("!(request|help)(.*)")
+	re, err := regexp.Compile(`\$(request|help)(.*)`)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -175,7 +197,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 				return
 			}
 
-			maxAge := time.Hour * 12
+			maxAge := time.Hour * 2
 			receipts.Prune(maxAge)
 			receipt := receipts.FindByChainPrefixAndUsername(prefix, m.Author.Username)
 			if receipt != nil {
@@ -193,11 +215,20 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 				log.Fatal(err)
 			}
 
-			err = chain.Send(dstAddr, coins)
-			if err != nil {
-				reportError(s, m, err)
-				return
-			}
+			//err = chain.Send(dstAddr, coins)
+			//if err != nil {
+			//	reportError(s, m, err)
+			//	return
+			//}
+
+			faucet.SendTask(chain.Prefix, &worker.Work{
+				ChainId: chain.Prefix,
+				Msg: banktypes.Output{
+					Address: dstAddr,
+					Coins:   coins,
+				},
+				DiscordMessage: m,
+			})
 
 			receipts.Add(FundingReceipt{
 				ChainPrefix: prefix,
@@ -205,10 +236,6 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 				FundedAt:    time.Now(),
 				Amount:      coins,
 			})
-
-			// Everything worked, so-- respond successfully to Discord requester
-			sendReaction(s, m, "✅")
-			sendMessage(s, m, fmt.Sprintf("Dispensed 💸 `%s`", coins))
 
 		default:
 			help(s, m)
