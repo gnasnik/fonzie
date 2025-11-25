@@ -1,14 +1,12 @@
 module github.com/umee-network/fonzie
 
-go 1.21.1
-
-toolchain go1.22.0
+go 1.24.6
 
 // https://github.com/cosmos/cosmos-sdk/issues/8469
 replace github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
 
 require (
-	github.com/bwmarrin/discordgo v0.24.0
+	github.com/bwmarrin/discordgo v0.29.0
 	github.com/cosmos/btcutil v1.0.5
 	github.com/cosmos/cosmos-sdk v0.50.8
 	github.com/go-resty/resty/v2 v2.7.0
